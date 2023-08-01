@@ -1,0 +1,223 @@
+import numpy as np
+
+
+def runge_kutta_step(func, x, t, dt, **params):
+    '''Compute 1 step of 4th-order
+    Runge-Kutta method (RK4)
+    
+    Args:
+        func (function): system equation
+        (dx/dt = func(x, t, **params))
+        x (np.ndarray or list): system state
+        t (float): current time
+        dt (float): timestep
+    '''
+    x = np.array(x)
+    k1 = dt * func(x, t, **params)
+    k2 = dt * func(x + 0.5 * k1, t + 0.5 * dt, **params)
+    k3 = dt * func(x + 0.5 * k2, t + 0.5 * dt, **params)
+    k4 = dt * func(x + k3, t + dt, **params)
+    x += (k1 + 2 * k2 + 2 * k3 + k4) / 6
+    return x
+
+
+def fitzhugh_nagumo(x, t, Iext=0.7, a=0.7, b=0.8, c=10):
+    '''Fitzhugh nagumo neuron model
+    
+    Args:
+        x: state (membrane potential, refractory dynamics)
+        t: time
+        Iext: external signal
+        a, b, c: system parameters
+    '''
+    x_dot = np.zeros_like(x)
+    x_dot[0] = c * (x[0] - x[0]**3/3 - x[1] + Iext)
+    x_dot[1] = a + x[0] - b*x[1]
+    return x_dot
+
+
+def navigation_dynamics(x, t, FL=0, FR=0, g1=15, g2=20):
+    '''Equation for the agent navigation motion
+    
+    Args:
+        x: state (x and y position, heading direction)
+        t: time
+        FL, FR: forward forces
+        g1, g2: system parameters
+    '''
+    x_dot = np.zeros_like(x)
+    x_dot[0] = g2 * (FL + FR) * np.cos(x[2]*t)
+    x_dot[1] = g2 * (FL + FR) * np.sin(x[2]*t)
+    x_dot[2] = g1 * (FL - FR)
+    return x_dot
+
+
+class FitzhughNagumoNetwork(object):
+    '''Neural network composed of Fitzhugh-Nagumo neurons
+    
+    Attributes:
+        T (int): total number of time steps to simulate
+        dt (float): simulation time step
+        Nin (int): number of input neurons
+        Nhidden (int): number of hidden (internal) neurons
+        Nout (int): number of output neurons
+        delay (int): delay of neuron signal propagation
+        p (float): connecting probability between neurons
+        seed (int): random seed
+    '''
+    def __init__(self, T=200000, dt=0.01,
+                 Nin=10, Nhidden=16, Nout=4,
+                 delay=10, pulse_max=0.7, pulse_min=0.0,
+                 motor_amp=1.5, pulse_width=20,
+                 p=0.2, seed=0):
+        
+        self.T = T
+        self.dt = dt
+        self.Nin = Nin
+        self.Nhidden = Nhidden
+        self.Nout = Nout
+        self.delay = delay
+        self.pulse_max = pulse_max
+        self.pulse_min = pulse_min
+        self.motor_amp = motor_amp
+        self.pulse_width = pulse_width
+        self.p = p
+        self.rnd = np.random.RandomState(seed)
+
+        # initialize state of each neuron
+        # self.Xin = np.zeros((Nin, 2))
+        # self.Xhidden = np.zeros((Nhidden, 2))
+        # self.Xout = np.zeros((Nout, 2))
+        self.Xin = self.rnd.uniform(size=(Nin, 2))
+        self.Xhidden = self.rnd.uniform(size=(Nhidden, 2))
+        self.Xout = self.rnd.uniform(size=(Nout, 2))
+        self.steps = 0
+
+        # define connectivity matrix
+        self.W_in_hidden = self.rnd.uniform(0, 1, (Nhidden, Nin)) < p
+        self.W_hidden_out = self.rnd.uniform(0, 1, (Nout, Nhidden)) < p
+        self.W_hidden_hidden = self.rnd.uniform(0, 1, (Nhidden, Nhidden)) < p
+        self.W_out_hidden = self.rnd.uniform(0, 1, (Nhidden, Nout)) < p
+
+        # pulse signals
+        self.pulse_hidden = np.zeros((T, Nhidden))
+        self.pulse_out = np.zeros((T, Nout))
+        self.pulse_motor = np.zeros((T, Nout))
+
+    def step(self, Iin, Ihidden, Iout):
+        t = self.steps * self.dt
+        for i in range(self.Nin):
+            self.Xin[i] = runge_kutta_step(
+                fitzhugh_nagumo, self.Xin[i], t, self.dt,
+                Iext = Iin[i])
+        for i in range(self.Nhidden):
+            self.Xhidden[i] = runge_kutta_step(
+                fitzhugh_nagumo, self.Xhidden[i], t, self.dt,
+                Iext = Ihidden[i])
+        for i in range(self.Nout):
+            self.Xout[i] = runge_kutta_step(
+                fitzhugh_nagumo, self.Xout[i], t, self.dt,
+                Iext = Iout[i])
+        self.steps += 1
+        return self.Xin, self.Xhidden, self.Xout
+    
+    def propagate_pulse(self):
+        pulse_range = slice(
+            self.steps + self.delay,
+            self.steps + self.delay + self.pulse_width
+        )
+
+        # in -> hidden
+        idx_hidden = np.dot(self.W_in_hidden, self.Xin[:, 0] > 0) > 0
+        self.pulse_hidden[pulse_range, idx_hidden] = 1
+
+        # hidden -> out
+        idx_out = np.dot(self.W_hidden_out, self.Xhidden[:, 0] > 0) > 0
+        self.pulse_out[pulse_range, idx_out] = 1
+
+        # hidden -> hidden
+        idx_hidden = np.dot(self.W_hidden_hidden, self.Xhidden[:, 0] > 0) > 0
+        self.pulse_hidden[pulse_range, idx_hidden] = 1
+
+        # out -> hidden
+        idx_hidden = np.dot(self.W_out_hidden, self.Xout[:, 0] > 0) > 0
+        self.pulse_hidden[pulse_range, idx_hidden] = 1
+
+        # out -> motor
+        range_motor = slice(self.steps, self.steps + self.pulse_width)
+        idx_motor = self.Xout[:, 0] > 0
+        self.pulse_motor[range_motor, idx_motor] = 1
+
+    def compute_current_signal(self):
+        Ihidden = self.pulse_hidden[self.steps] * self.pulse_max + \
+            (1 - self.pulse_hidden[self.steps]) * self.pulse_min
+        Iout = self.pulse_out[self.steps] * self.pulse_max + \
+            (1 - self.pulse_out[self.steps]) * self.pulse_min
+        Motor = self.pulse_motor[self.steps] * self.motor_amp
+        return Ihidden, Iout, Motor
+
+
+class EmbodiedAgent(object):
+    def __init__(self, radius=10,
+                 sensor_max=0.28, sensor_min=0.21,
+                 grid_width=30.0, **params):
+        self.net = FitzhughNagumoNetwork(**params)
+        
+        # initial state of agent
+        # X[0]: x position
+        # X[1]: y position
+        # X[2]: heading direction (theta)
+        self.X = np.array([0., 0., 1.])
+        self.steps = 0
+
+        # simulation parameters
+        self.T = self.net.T
+        self.dt = self.net.dt
+
+        # agent parameters
+        self.radius = radius
+
+        # environment parameters
+        self.sensor_max = sensor_max
+        self.sensor_min = sensor_min
+        self.grid_width = grid_width
+
+    def compute_sensor(self):
+        vals = np.array([self.sensor_max, self.sensor_min])
+        
+        sensor_theta = np.arange(10) * np.pi / 5
+        sensor_pos = np.zeros((10, 2))
+        sensor_pos[:, 0] = self.X[0] + \
+            self.radius * np.sin(self.X[2] + sensor_theta)
+        sensor_pos[:, 1] = self.X[1] + \
+            self.radius * np.sin(self.X[2] + sensor_theta)
+        
+        grid = np.mod(sensor_pos, float(2*self.grid_width))
+        grid = (grid > self.grid_width)
+        grid = np.sum(grid, axis=-1) % 2   # digital value
+
+        Iin = vals[grid]
+        return Iin
+    
+    def step(self):
+        t = self.steps * self.dt
+        Iin = self.compute_sensor()
+        self.net.propagate_pulse()
+        Ihidden, Iout, Motor = self.net.compute_current_signal()
+        self.net.step(Iin, Ihidden, Iout)
+
+        FL = np.tanh(Motor[0] + Motor[1])
+        FR = np.tanh(Motor[2] + Motor[3])
+        self.X = runge_kutta_step(
+            navigation_dynamics, self.X, t, self.dt,
+            FL=FL, FR=FR)
+        self.steps += 1
+
+        intermediate_data = {
+            "Iin": Iin,
+            "Ihidden": Ihidden,
+            "Iout": Iout,
+            "Motor": Motor,
+            "Force": np.array([FL, FR])
+        }
+        return self.X, intermediate_data
