@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 
 def runge_kutta_step(func, x, t, dt, **params):
@@ -221,3 +223,31 @@ class EmbodiedAgent(object):
             "Force": np.array([FL, FR])
         }
         return self.X, intermediate_data
+
+
+def visualize(rec_agent_state, stepsize=100, file_path="figs/animation.mp4"):
+    fig, ax = plt.subplots(figsize=(9, 9))
+    line, = ax.plot(rec_agent_state[:, 0],rec_agent_state[:, 1],
+                    c='k', lw=3)
+    text = ax.text(0.1, 0.9, 'step 0',
+                   fontsize='large',
+                   horizontalalignment='center',
+                   verticalalignment='center',
+                   transform=ax.transAxes)
+    num_frames = rec_agent_state.shape[0] // stepsize + 1
+
+    def _animate(i):
+        _end = stepsize*i + 1
+        line.set_xdata(rec_agent_state[:_end, 0])
+        line.set_ydata(rec_agent_state[:_end, 1])
+        text.set_text(f'step {stepsize*i}')
+        return line, text
+
+    ani = animation.FuncAnimation(
+        fig, _animate, blit=True,
+        frames=range(num_frames), interval=stepsize
+    )
+
+    writer = animation.FFMpegWriter(
+        fps=30, metadata=dict(artist='Me'), bitrate=1800)
+    ani.save(file_path, writer=writer)

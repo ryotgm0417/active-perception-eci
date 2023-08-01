@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 from libs import *
 
 T = 100000
@@ -13,9 +14,9 @@ rec_out = np.zeros((T, 4))
 rec_motor = np.zeros((T, 4))
 rec_agent_state = np.zeros((T, 3))
 
-agent = EmbodiedAgent(grid_width=5, T=T, dt=dt)
+agent = EmbodiedAgent(grid_width=20, T=T, dt=dt)
 
-for idx, t in enumerate(ts):
+for idx, t in enumerate(tqdm(ts)):
     # record data (1)
     rec_in[idx] = agent.net.Xin[:, 0]
     rec_hidden[idx] = agent.net.Xhidden[:, 0]
@@ -59,3 +60,5 @@ ax.set_ylabel('Value')
 handles, labels = ax.get_legend_handles_labels()
 ax.legend([handles[0]], labels[0])
 plt.savefig("figs/view_embodied_agent_motor.png")
+
+visualize(rec_agent_state, file_path="figs/animation.mp4")
