@@ -22,6 +22,8 @@ for interval in pulse_interval:
             fitzhugh_nagumo, x, t, dt,
             a=0.7, b=0.8, c=10, Iext=pulse_input[idx])
 
+    # [plot]
+    # Neuron dynamics
     fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 6),
                            gridspec_kw={'height_ratios': [3, 1]})
     ax[0].plot(ts, record[:, 0], label='u (membrane potential)')

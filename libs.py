@@ -64,6 +64,9 @@ class FitzhughNagumoNetwork(object):
         Nhidden (int): number of hidden (internal) neurons
         Nout (int): number of output neurons
         delay (int): delay of neuron signal propagation
+        pulse_min (float): minimum value of pulse in neuron output
+        pulse_nax (float): maximum value of pulse in neuron output
+        motor_amp (float): amplitude of motor output
         p (float): connecting probability between neurons
         seed (int): random seed
     '''
@@ -154,6 +157,15 @@ class FitzhughNagumoNetwork(object):
 
 
 class EmbodiedAgent(object):
+    '''Model of embodied agent, composed of mobile robot in
+    2D environment + neural network of Fitzhugh-Nagumo neurons
+
+    Attributes:
+        radius (float): size of mobile robot
+        sensor_max (float): maximum value of input signal from sensors
+        sensor_min (float): minimum value of input signal from sensors
+        grid_width (float): interval of changing light intensity, on 2D environment
+    '''
     def __init__(self, radius=10,
                  sensor_max=0.28, sensor_min=0.21,
                  grid_width=20, **params):
@@ -181,6 +193,7 @@ class EmbodiedAgent(object):
     def compute_sensor(self):
         vals = np.array([self.sensor_max, self.sensor_min])
 
+        # compute current sensor position
         sensor_theta = np.arange(10) * np.pi / 5
         sensor_pos = np.zeros((10, 2))
         sensor_pos[:, 0] = self.X[0] + \
@@ -188,11 +201,12 @@ class EmbodiedAgent(object):
         sensor_pos[:, 1] = self.X[1] + \
             self.radius * np.sin(self.X[2] + sensor_theta)
 
+        # get light intensity of each sensor position
         grid = np.mod(sensor_pos, float(2*self.grid_width))
         grid = (grid > self.grid_width)
         grid = np.sum(grid, axis=-1) % 2   # digital value
-
         Iin = vals[grid]
+
         return Iin, sensor_pos, grid
 
     def step(self):
@@ -202,8 +216,8 @@ class EmbodiedAgent(object):
         Ihidden, Iout, Motor = self.net.compute_current_signal()
         self.net.step(Iin, Ihidden, Iout)
 
-        FL = np.tanh(Motor[0] + Motor[1])
-        FR = np.tanh(Motor[2] + Motor[3])
+        FL = np.tanh(Motor[0] + Motor[1])   # force
+        FR = np.tanh(Motor[2] + Motor[3])   # force
         self.X = runge_kutta_step(
             navigation_dynamics, self.X, t, self.dt,
             FL=FL, FR=FR)

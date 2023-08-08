@@ -43,11 +43,12 @@ for idx, t in enumerate(tqdm(ts)):
     rec_sensor_pos[idx] = data["Sensor_pos"]
     rec_sensor_activation[idx] = data["Sensor_activation"]
 
-# plot
+# [plot]
 plot_range = slice(0, 200)
 save_dir = f"figs/view_embodied_agent_grid={grid_width:.4g}"
-os.makedirs(save_dir, exist_ok=True)
+os.makedirs(save_dir, exist_ok=True)    # make directory for saving figures
 
+# Trajectory of Mobile Robot
 fig, ax = plt.subplots(figsize=(9, 9))
 ax.plot(rec_agent_state[:, 0], rec_agent_state[:, 1],
         c='k', lw=2)
@@ -66,6 +67,7 @@ ax.set_xlabel('X')
 ax.set_ylabel('Y')
 plt.savefig(f"{save_dir}/agent_pos.png")
 
+# Neural Network Dynamics
 fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 6),
                        gridspec_kw={'height_ratios': [3, 1]})
 ax[0].plot(ts[plot_range], rec_in[plot_range], c='r', lw=1, label='input neurons')
@@ -83,6 +85,7 @@ ax[0].legend([handle for i, handle in enumerate(handles0) if i in display],
 ax[1].legend([handles1[0]], [labels1[0]])
 plt.savefig(f"{save_dir}/network_activity.png")
 
+# Motor Output
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.plot(ts[plot_range], rec_motor[plot_range], c='b', lw=1.5, label='motor output')
 ax.set_xlabel('Time')
@@ -91,5 +94,6 @@ handles, labels = ax.get_legend_handles_labels()
 ax.legend([handles[0]], [labels[0]])
 plt.savefig(f"{save_dir}/motor.png")
 
+# Create Animation
 visualize(rec_agent_state, rec_sensor_pos, rec_sensor_activation, grid_width,
           file_path=f"{save_dir}/animation.mp4")

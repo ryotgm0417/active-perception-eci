@@ -35,7 +35,8 @@ for idx, t in enumerate(tqdm(ts)):
     # advance simulation
     net.step(Iin, Ihidden, Iout)
 
-# plot
+# [plot]
+# Neural Network Dynamics
 fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 6),
                        gridspec_kw={'height_ratios': [3, 1]})
 ax[0].plot(ts[:plot_length], rec_in[:plot_length], c='r', lw=1, label='input neurons')
@@ -53,6 +54,7 @@ ax[0].legend([handle for i, handle in enumerate(handles0) if i in display],
 ax[1].legend([handles1[0]], [labels1[0]])
 plt.savefig("figs/view_neural_network_nn.png")
 
+# Motor Output
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.plot(ts[:plot_length], rec_motor[:plot_length], c='b', lw=1.5, label='motor output')
 ax.set_xlabel('Time')
