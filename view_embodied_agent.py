@@ -1,11 +1,19 @@
+import os
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from libs import EmbodiedAgent, visualize
 
-T = 10000
-dt = 0.1
-grid_width = 50
+parser = argparse.ArgumentParser()
+parser.add_argument("--T", type=int, default=10000)
+parser.add_argument("--dt", type=float, default=0.1)
+parser.add_argument("--grid_width", type=float, default=50)
+args = parser.parse_args()
+
+T = args.T
+dt = args.dt
+grid_width = args.grid_width
 
 ts = np.arange(T) * dt
 rec_Iin = np.zeros((T, 10))
@@ -37,6 +45,8 @@ for idx, t in enumerate(tqdm(ts)):
 
 # plot
 plot_range = slice(0, 200)
+save_dir = f"figs/view_embodied_agent_grid={grid_width:.4g}"
+os.makedirs(save_dir, exist_ok=True)
 
 fig, ax = plt.subplots(figsize=(9, 9))
 ax.plot(rec_agent_state[:, 0], rec_agent_state[:, 1],
@@ -54,7 +64,7 @@ for i in range(ymin, ymax):
     ax.axhline(i*grid_width, lw=1)
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
-plt.savefig("figs/view_embodied_agent_pos.png")
+plt.savefig(f"{save_dir}/agent_pos.png")
 
 fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 6),
                        gridspec_kw={'height_ratios': [3, 1]})
@@ -71,7 +81,7 @@ display = (0, 10, 26)
 ax[0].legend([handle for i, handle in enumerate(handles0) if i in display],
           [label for j, label in enumerate(labels0) if j in display])
 ax[1].legend([handles1[0]], [labels1[0]])
-plt.savefig("figs/view_embodied_agent_nn.png")
+plt.savefig(f"{save_dir}/network_activity.png")
 
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.plot(ts[plot_range], rec_motor[plot_range], c='b', lw=1.5, label='motor output')
@@ -79,7 +89,7 @@ ax.set_xlabel('Time')
 ax.set_ylabel('Value')
 handles, labels = ax.get_legend_handles_labels()
 ax.legend([handles[0]], [labels[0]])
-plt.savefig("figs/view_embodied_agent_motor.png")
+plt.savefig(f"{save_dir}/motor.png")
 
 visualize(rec_agent_state, rec_sensor_pos, rec_sensor_activation, grid_width,
-          file_path="figs/animation.mp4")
+          file_path=f"{save_dir}/animation.mp4")
