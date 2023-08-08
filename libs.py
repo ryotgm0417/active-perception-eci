@@ -38,7 +38,7 @@ def fitzhugh_nagumo(x, t, Iext=0.7, a=0.7, b=0.8, c=10):
     return x_dot
 
 
-def navigation_dynamics(x, t, FL=0, FR=0, g1=15, g2=20):
+def navigation_dynamics(x, t, FL=0, FR=0, g1=5, g2=50):
     '''Equation for the agent navigation motion
 
     Args:
@@ -48,8 +48,8 @@ def navigation_dynamics(x, t, FL=0, FR=0, g1=15, g2=20):
         g1, g2: system parameters
     '''
     x_dot = np.zeros_like(x)
-    x_dot[0] = g2 * (FL + FR) * np.cos(x[2]*t)
-    x_dot[1] = g2 * (FL + FR) * np.sin(x[2]*t)
+    x_dot[0] = g2 * (FL + FR) * np.cos(x[2])
+    x_dot[1] = g2 * (FL + FR) * np.sin(x[2])
     x_dot[2] = g1 * (FL - FR)
     return x_dot
 
@@ -67,11 +67,10 @@ class FitzhughNagumoNetwork(object):
         p (float): connecting probability between neurons
         seed (int): random seed
     '''
-    def __init__(self, T=200000, dt=0.01,
+    def __init__(self, T=10000, dt=0.01,
                  Nin=10, Nhidden=16, Nout=4,
                  delay=10, pulse_max=0.7, pulse_min=0.0,
-                 motor_amp=1.5, pulse_width=20,
-                 p=0.2, seed=0):
+                 motor_amp=1.5, p=0.2, seed=0):
 
         self.T = T
         self.dt = dt
@@ -82,7 +81,6 @@ class FitzhughNagumoNetwork(object):
         self.pulse_max = pulse_max
         self.pulse_min = pulse_min
         self.motor_amp = motor_amp
-        self.pulse_width = pulse_width
         self.p = p
         self.rnd = np.random.RandomState(seed)
 
@@ -124,31 +122,27 @@ class FitzhughNagumoNetwork(object):
         return self.Xin, self.Xhidden, self.Xout
 
     def propagate_pulse(self):
-        pulse_range = slice(
-            self.steps + self.delay,
-            self.steps + self.delay + self.pulse_width
-        )
+        delayed_steps = min(self.steps + self.delay, self.T-1)
 
         # in -> hidden
         idx_hidden = np.dot(self.W_in_hidden, self.Xin[:, 0] > 0) > 0
-        self.pulse_hidden[pulse_range, idx_hidden] = 1
+        self.pulse_hidden[delayed_steps, idx_hidden] = 1
 
         # hidden -> out
         idx_out = np.dot(self.W_hidden_out, self.Xhidden[:, 0] > 0) > 0
-        self.pulse_out[pulse_range, idx_out] = 1
+        self.pulse_out[delayed_steps, idx_out] = 1
 
         # hidden -> hidden
         idx_hidden = np.dot(self.W_hidden_hidden, self.Xhidden[:, 0] > 0) > 0
-        self.pulse_hidden[pulse_range, idx_hidden] = 1
+        self.pulse_hidden[delayed_steps, idx_hidden] = 1
 
         # out -> hidden
         idx_hidden = np.dot(self.W_out_hidden, self.Xout[:, 0] > 0) > 0
-        self.pulse_hidden[pulse_range, idx_hidden] = 1
+        self.pulse_hidden[delayed_steps, idx_hidden] = 1
 
         # out -> motor
-        range_motor = slice(self.steps, self.steps + self.pulse_width)
         idx_motor = self.Xout[:, 0] > 0
-        self.pulse_motor[range_motor, idx_motor] = 1
+        self.pulse_motor[self.steps, idx_motor] = 1
 
     def compute_current_signal(self):
         Ihidden = self.pulse_hidden[self.steps] * self.pulse_max + \
@@ -162,7 +156,7 @@ class FitzhughNagumoNetwork(object):
 class EmbodiedAgent(object):
     def __init__(self, radius=10,
                  sensor_max=0.28, sensor_min=0.21,
-                 grid_width=30.0, **params):
+                 grid_width=20, **params):
         self.net = FitzhughNagumoNetwork(**params)
 
         # initial state of agent
@@ -190,7 +184,7 @@ class EmbodiedAgent(object):
         sensor_theta = np.arange(10) * np.pi / 5
         sensor_pos = np.zeros((10, 2))
         sensor_pos[:, 0] = self.X[0] + \
-            self.radius * np.sin(self.X[2] + sensor_theta)
+            self.radius * np.cos(self.X[2] + sensor_theta)
         sensor_pos[:, 1] = self.X[1] + \
             self.radius * np.sin(self.X[2] + sensor_theta)
 
@@ -199,11 +193,11 @@ class EmbodiedAgent(object):
         grid = np.sum(grid, axis=-1) % 2   # digital value
 
         Iin = vals[grid]
-        return Iin
+        return Iin, sensor_pos, grid
 
     def step(self):
         t = self.steps * self.dt
-        Iin = self.compute_sensor()
+        Iin, sensor_pos, grid = self.compute_sensor()
         self.net.propagate_pulse()
         Ihidden, Iout, Motor = self.net.compute_current_signal()
         self.net.step(Iin, Ihidden, Iout)
@@ -220,28 +214,60 @@ class EmbodiedAgent(object):
             "Ihidden": Ihidden,
             "Iout": Iout,
             "Motor": Motor,
-            "Force": np.array([FL, FR])
+            "Force": np.array([FL, FR]),
+            "Sensor_pos": sensor_pos,
+            "Sensor_activation": grid
         }
         return self.X, intermediate_data
 
 
-def visualize(rec_agent_state, stepsize=100, file_path="figs/animation.mp4"):
+def visualize(rec_agent_state, rec_sensor_pos, rec_sensor_activation, grid_width,
+              stepsize=1, total_steps=2001, file_path="figs/animation.mp4"):
+    
+    print("Drawing animation...")
     fig, ax = plt.subplots(figsize=(9, 9))
-    line, = ax.plot(rec_agent_state[:, 0], rec_agent_state[:, 1],
+
+    # Animation objects
+    line, = ax.plot(rec_agent_state[:total_steps, 0],
+                    rec_agent_state[:total_steps, 1],
                     c='k', lw=3)
     text = ax.text(0.1, 0.9, 'step 0',
                    fontsize='large',
                    horizontalalignment='center',
                    verticalalignment='center',
                    transform=ax.transAxes)
-    num_frames = rec_agent_state.shape[0] // stepsize + 1
+    sensor_color = ['magenta' if rec_sensor_activation[0, i] == 0 else 'lime' \
+                    for i in range(10)]
+    coll = ax.scatter(rec_sensor_pos[0, :, 0], rec_sensor_pos[0, :, 1],
+                       c=sensor_color, s=20)
+    ax.set_aspect('equal')
+
+    # Draw grid
+    xmin, xmax = ax.get_xlim()
+    xmin = int(xmin // grid_width) + 1
+    xmax = int(xmax // grid_width) + 1
+    ymin, ymax = ax.get_ylim()
+    ymin = int(ymin // grid_width) + 1
+    ymax = int(ymax // grid_width) + 1
+    for i in range(xmin, xmax):
+        ax.axvline(i*grid_width)
+    for i in range(ymin, ymax):
+        ax.axhline(i*grid_width)
+
+    num_frames = min(total_steps, rec_agent_state.shape[0])
+    num_frames = num_frames // stepsize
 
     def _animate(i):
         _end = stepsize*i + 1
         line.set_xdata(rec_agent_state[:_end, 0])
         line.set_ydata(rec_agent_state[:_end, 1])
         text.set_text(f'step {stepsize*i}')
-        return line, text
+        coll.set_offsets(np.vstack([rec_sensor_pos[_end-1, :, 0],
+                                    rec_sensor_pos[_end-1, :, 1]]).T)
+        sensor_color = ['magenta' if rec_sensor_activation[_end-1, i] == 0 \
+                        else 'lime' for i in range(10)]
+        coll.set_color(sensor_color)
+        return line, text, coll
 
     ani = animation.FuncAnimation(
         fig, _animate, blit=True,
