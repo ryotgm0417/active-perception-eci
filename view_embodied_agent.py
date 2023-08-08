@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from libs import *
+from libs import EmbodiedAgent, visualize
 
 T = 100000
 dt = 0.01

@@ -6,7 +6,7 @@ import matplotlib.animation as animation
 def runge_kutta_step(func, x, t, dt, **params):
     '''Compute 1 step of 4th-order
     Runge-Kutta method (RK4)
-    
+
     Args:
         func (function): system equation
         (dx/dt = func(x, t, **params))
@@ -25,7 +25,7 @@ def runge_kutta_step(func, x, t, dt, **params):
 
 def fitzhugh_nagumo(x, t, Iext=0.7, a=0.7, b=0.8, c=10):
     '''Fitzhugh nagumo neuron model
-    
+
     Args:
         x: state (membrane potential, refractory dynamics)
         t: time
@@ -40,7 +40,7 @@ def fitzhugh_nagumo(x, t, Iext=0.7, a=0.7, b=0.8, c=10):
 
 def navigation_dynamics(x, t, FL=0, FR=0, g1=15, g2=20):
     '''Equation for the agent navigation motion
-    
+
     Args:
         x: state (x and y position, heading direction)
         t: time
@@ -56,7 +56,7 @@ def navigation_dynamics(x, t, FL=0, FR=0, g1=15, g2=20):
 
 class FitzhughNagumoNetwork(object):
     '''Neural network composed of Fitzhugh-Nagumo neurons
-    
+
     Attributes:
         T (int): total number of time steps to simulate
         dt (float): simulation time step
@@ -72,7 +72,7 @@ class FitzhughNagumoNetwork(object):
                  delay=10, pulse_max=0.7, pulse_min=0.0,
                  motor_amp=1.5, pulse_width=20,
                  p=0.2, seed=0):
-        
+
         self.T = T
         self.dt = dt
         self.Nin = Nin
@@ -111,18 +111,18 @@ class FitzhughNagumoNetwork(object):
         for i in range(self.Nin):
             self.Xin[i] = runge_kutta_step(
                 fitzhugh_nagumo, self.Xin[i], t, self.dt,
-                Iext = Iin[i])
+                Iext=Iin[i])
         for i in range(self.Nhidden):
             self.Xhidden[i] = runge_kutta_step(
                 fitzhugh_nagumo, self.Xhidden[i], t, self.dt,
-                Iext = Ihidden[i])
+                Iext=Ihidden[i])
         for i in range(self.Nout):
             self.Xout[i] = runge_kutta_step(
                 fitzhugh_nagumo, self.Xout[i], t, self.dt,
-                Iext = Iout[i])
+                Iext=Iout[i])
         self.steps += 1
         return self.Xin, self.Xhidden, self.Xout
-    
+
     def propagate_pulse(self):
         pulse_range = slice(
             self.steps + self.delay,
@@ -164,7 +164,7 @@ class EmbodiedAgent(object):
                  sensor_max=0.28, sensor_min=0.21,
                  grid_width=30.0, **params):
         self.net = FitzhughNagumoNetwork(**params)
-        
+
         # initial state of agent
         # X[0]: x position
         # X[1]: y position
@@ -186,21 +186,21 @@ class EmbodiedAgent(object):
 
     def compute_sensor(self):
         vals = np.array([self.sensor_max, self.sensor_min])
-        
+
         sensor_theta = np.arange(10) * np.pi / 5
         sensor_pos = np.zeros((10, 2))
         sensor_pos[:, 0] = self.X[0] + \
             self.radius * np.sin(self.X[2] + sensor_theta)
         sensor_pos[:, 1] = self.X[1] + \
             self.radius * np.sin(self.X[2] + sensor_theta)
-        
+
         grid = np.mod(sensor_pos, float(2*self.grid_width))
         grid = (grid > self.grid_width)
         grid = np.sum(grid, axis=-1) % 2   # digital value
 
         Iin = vals[grid]
         return Iin
-    
+
     def step(self):
         t = self.steps * self.dt
         Iin = self.compute_sensor()
@@ -227,7 +227,7 @@ class EmbodiedAgent(object):
 
 def visualize(rec_agent_state, stepsize=100, file_path="figs/animation.mp4"):
     fig, ax = plt.subplots(figsize=(9, 9))
-    line, = ax.plot(rec_agent_state[:, 0],rec_agent_state[:, 1],
+    line, = ax.plot(rec_agent_state[:, 0], rec_agent_state[:, 1],
                     c='k', lw=3)
     text = ax.text(0.1, 0.9, 'step 0',
                    fontsize='large',

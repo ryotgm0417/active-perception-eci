@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from libs import *
+from libs import runge_kutta_step, fitzhugh_nagumo
 
 T = 1000
 dt = 0.01
@@ -17,7 +17,7 @@ for idx, t in enumerate(ts):
     x = runge_kutta_step(
         fitzhugh_nagumo, x, t, dt,
         a=0.7, b=0.8, c=10, Iext=Iext)
-    
+
 fig, ax = plt.subplots(figsize=(6, 6))
 ax.plot(ts, record[:, 0], label='u (membrane potential)')
 ax.plot(ts, record[:, 1], label='v (refractory dynamics)')

@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from libs import *
+from libs import FitzhughNagumoNetwork
 
 T = 10000
 plot_length = 2000
